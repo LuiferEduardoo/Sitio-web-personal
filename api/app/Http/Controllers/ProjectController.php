@@ -14,18 +14,13 @@ class ProjectController extends Controller
     public function constructor(Request $request){
         $this->replaceMiniature = filter_var($request->input('replace_miniature'), FILTER_VALIDATE_BOOLEAN);
     }
-    public function getProject(Request $request){
-        $query = Projects::with('miniature', 'image', 'categories', 'subcategories', 'technology' ,'tags');
-        if ($request->input('id')) {
-            $id = $request->input('id');
-            $query->where('id', $id);
+    public function getProject(Request $request, $id = null){
+        $relations = ['repositories.categories', 'miniature', 'image', 'categories', 'subcategories', 'technology' ,'tags'];
+        $link = $request->query('link');
+        if ($id || $link) {
+            return $this->HandlesFilndElement->findOne(Projects::class, $id, $link, $relations);
         }
-        $query->where('visible', true);
-        $query->with(['history' => function ($historyQuery) {
-            $historyQuery->latest('created_at');
-        }]);
-        $query->orderBy('created_at', 'desc');
-        $project = $query->get();
+        $project = $this->HandlesFilndElement->findAll(Projects::class, $relations, $request->query());
         return response()->json($project);
     }
 
@@ -33,70 +28,63 @@ class ProjectController extends Controller
         return $this->executeInTransaction(function () use ($request) {
             $project = new Projects([
                 'name' => $request->input('name'),
+                'description' => $request->input('description'),
                 'brief_description' => $request->input('brief_description'),
-                'link' => $this->link($request->input('name'), Projects::class),
+                'link' => $this->link->generate($request->input('name'), Projects::class),
                 ]);
             $project->save(); // Se guarda la información del repositorio en la base de datos
-            $this->saveImagesAndClassification($project, 'project/image', 'image', true, $request->hasFile('miniature'), $request->file('miniature'), $request->input('id_miniature'));
+            $this->imageAssociationService->saveImages($project, $this->haveImages, $this->images, $this->ids_images, 'project/image', 'image', $this->token);
+            $this->imageAssociationService->saveImages($project, true, $request->file('miniature'), $request->input('id_miniature'), 'project/miniature', 'miniature', $this->token);
+            $this->saveClassification($project, true);
             return response()->json([
                 'message' => 'Project successfully created'
             ], 200);
         });
     }
 
-    public function deleteProject(Request $request){
-        return $this->executeInTransaction(function () use ($request) {
-            $id = $request->input('id');
+    public function deleteProject(Request $request, $id){
+        return $this->executeInTransaction(function () use ($request, $id) {
             $eliminateMiniature = filter_var($request->input('eliminate_miniature'), FILTER_VALIDATE_BOOLEAN);
-            if(Projects::findOrFail($id)){
-                $project = Projects::findOrFail($id);
-                $this->deleteImagesAndClassification($project, 'image', 'tecnologies', $eliminateMiniature);
+            $project = $this->HandlesFilndElement->findOne(Projects::class, $id);
+            if($project){
+                $this->imageAssociationService->deleteImages($project, 'image', $this->eliminateImages, $this->token);
+                $this->imageAssociationService->deleteImages($project, 'miniature', $eliminateMiniature, $this->token);
+                $this->deleteClassification($project, 'tecnologies');
                 $project->delete();
-                return response()->json(['message' => 'Project successfully deleted'],200);
+                return response()->json(['message' => 'Project successfully deleted'], 200);
             }
-            return response()->json([
-                'message' => "Project not fount"
-            ], 404);
         });
     }
 
-    public function putProject(ValidateDate $request, $id){
+    public function updateProject(ValidateDate $request, $id){
         return $this->executeInTransaction(function () use ($request, $id) {
-            $project = Projects::findOrFail($id);
-            $urlRepository = $request->input('url_repository');
-
-            // Se actualiza los campos de projects
-            $project->name = $request->input('name');
-            $project->link = $this->link($request->input('name'), $project);
-            $project->brief_description = $request->input('brief_description');
-            $project->url_repository = $urlRepository;
-            $project->save();
-            $this->updateImagesAndClassification($project, 'image', 'project/image', true, $request->hasFile('miniature'), $request->file('miniature'), $request->input('id_miniature'), $this->replaceMiniature); // Actualizamos las imagenes y clasificaciones
-            return response()->json([
-                'message' => 'Project successfully updated'
-            ], 200);
-        });
-    }
-
-    public function patchProject(ValidateDate $request, $id){
-        return $this->executeInTransaction(function () use ($request, $id) {
-            $project = Projects::find($id);
+            $project = $this->HandlesFilndElement->findOne(Projects::class, $id);
+            
             if ($request->input('name')) {
                 $name = $request->input('name');
                 $project->name = $name;
-                $project->link = $this->link($name, $project);
-            }
-            if ($request->input('url_repository')) {
-                $urlRepository = $request->input('url_repository');
+                $project->link = $this->link->generate($name, $project);
             }
             if ($request->input('brief_description')) {
                 $briefDescription = $request->input('brief_description');
                 $project->brief_description = $briefDescription;
             }
-            if ($request->input('visible')) {
+            if ($request->input('description')) {
+                $project->description = $request->input('description');
+            }
+            if ($request->input('project_link')) {
+                $project->project_link = $request->input('project_link');
+            }
+            if ($request->input('visible') !== null) {
                 $project->visible = $this->visible;
             }
-            $this->updateImagesAndClassification($project, 'image', 'project/image', $request->hasFile('miniature'), $request->file('miniature'), $request->input('id_miniature'), $this->replaceMiniature); // Actualizamos las imagenes y clasificaciones
+            if($request->input('important') !== null) {
+                $project->important = $this->important;
+            }
+            if($this->haveImages || $this->ids_images){
+                $this->imageAssociationService->updateImages($project,  $this->haveImages, $this->images, $this->replaceImages, 'image',  $this->ids_images, 'project/image', $this->token);
+            }
+            $this->updateClassification($project, true);
             $project->save();
             return response()->json([
                 'message' => 'Project updated successfully',

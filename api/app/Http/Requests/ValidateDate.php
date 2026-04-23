@@ -28,7 +28,6 @@ class ValidateDate extends FormRequest
                     'id_image' => ['nullable','string'],
                 ];
             case 'createSkills': 
-            case 'putSkills':
                 return [
                     'name' => ['required','string','max:255'],
                     'image' => ['nullable', 'image'],
@@ -39,6 +38,18 @@ class ValidateDate extends FormRequest
                     'tags' => ['required', 'string'],
                     'replace_image' => ['nullable','string'],
                 ];
+            case 'updateSkills': 
+                return [
+                    'name' => ['nullable','string','max:255'],
+                    'image' => ['nullable','image'],
+                    'id_image' => ['nullable','string'],
+                    'date' => ['nullable','string'],
+                    'tags' => ['nullable','string'],
+                    'categories' => ['nullable', 'string'],
+                    'subcategories' => ['nullable', 'string'],
+                    'replace_image' => ['nullable','string'],
+                ];
+
             case 'deleteSkills':
             case 'deleteProject':
             case 'deleteBlogPost':
@@ -47,43 +58,32 @@ class ValidateDate extends FormRequest
                     'eliminate_images' => ['nullable','boolean'],
                     'eliminate_miniature' => ['nullable','boolean']
                     ];
-
-            case 'patchSkills':
-            case 'patchProject':
-            case 'patchBlogPost':
+            
+            case 'updateBlogPost':
                 return [
-                    'name' => ['nullable','string','max:255'],
                     'brief_description' => ['nullable', 'string', 'max:5000'],
-                    'url_repository' => ['nullable', 'url'],
                     'title' => ['nullable','string','max:255'],
                     'content' => ['nullable', 'string'],
                     'authors' => ['nullable', 'string'],
                     'image_credits' => ['nullable', 'string'],
-                    'miniature' => ['nullable', 'image'],
-                    'id_miniature' => ['nullable', 'string'],
-                    'ids_images' => ['nullable','string'],
                     'image' => ['nullable','image'],
-                    'images' => ['nullable','array'],
-                    'ids_images' => ['nullable','string'],
                     'id_image' => ['nullable','string'],
                     'technologies' => ['nullable', 'string'],
-                    'date' => ['nullable','string'],
                     'tags' => ['nullable','string'],
                     'categories' => ['nullable', 'string'],
                     'subcategories' => ['nullable', 'string'],
                     'validate' => ['nullable','string'],
                     'replace_image' => ['nullable','string'],
-                    'replace_images' => ['nullable','string'],
-                    'replace_miniature' => ['nullable','string'],  
-                    ];
-                // Definir reglas de validación para los otros métodos
+                ];
 
                 case 'createProject':
-                case 'putProject':
                     return [
                         'name' => ['required','string','max:255'],
                         'brief_description' => ['required', 'string', 'max:5000'],
-                        'url_repository' => ['required', 'url'],
+                        'description' => ['required', 'string'],
+                        'project_link' => ['nullable', 'url'],
+                        'url_repositories' => ['required', 'string'],
+                        'categories_repositories' => ['required', 'string'],
                         'miniature' => ['nullable', 'image'],
                         'id_miniature' => ['nullable', 'string'],
                         'images' => ['nullable','array'],
@@ -96,8 +96,30 @@ class ValidateDate extends FormRequest
                         'replace_images' => ['nullable','string'],                        
                         ];
             
+                case 'updateProject':
+                    return [
+                        'name' => ['nullable','string','max:255'],
+                        'brief_description' => ['nullable', 'string', 'max:5000'],
+                        'description' => ['nullable', 'string'],
+                        'project_link' => ['nullable', 'url'],
+                        'url_repositories' => ['nullable', 'string'],
+                        'ids_update_repositories' => ['nullable', 'string'],
+                        'ids_eliminate_repositories' => ['nullable', 'string'],
+                        'categories_repositories' => ['nullable', 'string'],
+                        'categories_repositories_update' => ['nullable', 'string'],
+                        'miniature' => ['nullable', 'image'],
+                        'id_miniature' => ['nullable', 'string'],
+                        'images' => ['nullable','array'],
+                        'ids_images' => ['nullable','string'],
+                        'categories' => ['nullable', 'string'],
+                        'subcategories' => ['nullable', 'string'],
+                        'technologies' => ['nullable', 'string'],
+                        'tags' => ['nullable','string'],
+                        'replace_miniature' => ['nullable','string'],  
+                        'replace_images' => ['nullable','string'],     
+                    ];
+                
                 case 'createBlogPost':
-                case 'putBlogPost':
                     return [
                         'title' => ['required','string','max:255'],
                         'content' => ['required', 'string'],

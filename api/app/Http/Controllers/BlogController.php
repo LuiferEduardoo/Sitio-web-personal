@@ -18,15 +18,13 @@ class BlogController extends Controller
         }
         return $authors;
     }
-    public function getBlogPost(Request $request){
-        $query = BlogPost::with('user.profile', 'image', 'categories', 'subcategories' ,'tags');
-        if ($request->input('id')) {
-            $id = $request->input('id');
-            $query->where('id', $id);
+    public function getBlogPost(Request $request, $id = null){
+        $relations = ['user.profile', 'image', 'categories', 'subcategories' ,'tags'];
+        $link = $request->query('link');
+        if ($id || $link) {
+            return $this->HandlesFilndElement->findOne(BlogPost::class, $id, $link, $relations);
         }
-        $query->where('visible', true);
-        $query->orderBy('created_at', 'desc');
-        $blogPost = $query->get();
+        $blogPost = $this->HandlesFilndElement->findAll(BlogPost::class, $relations, $request->query());
         return response()->json($blogPost);
     }
     public function createBlogPost(ValidateDate $request){
@@ -35,66 +33,52 @@ class BlogController extends Controller
             $blogPost = new BlogPost([
                 'title' => $request->input('title'),
                 'content' => $this->parsedown->text($request->input('content')),
-                'link' => $this->link($request->input('title'), BlogPost::class),
+                'link' => $this->link->generate($request->input('title'), BlogPost::class),
                 'authors' => $this->authors($request),
-                'reading_time' => $this->readingTime($request->input('content')),
+                'reading_time' => $this->time->readingTime($request->input('content')),
                 'image_credits' => $request->input('image_credits'),
             ]);
             $blogPost->user_id = $request->user()->id;
             $blogPost->save();
-            $this->saveImagesAndClassification($blogPost, 'blog', 'image');
+            $this->imageAssociationService->saveImages($blogPost, $this->haveImages, $this->images, $this->ids_images, 'blog', 'image', $this->token);
+            $this->saveClassification($blogPost);
             return response()->json([
                 'message' => 'Blog post successfully created'
             ], 200);
         });
     }
 
-    public function deleteBlogPost(Request $request){
-        return $this->executeInTransaction(function () use ($request) {
-            $id = $request->input('id');
-            if(BlogPost::findOrFail($id)){
-                $blogPost = BlogPost::findOrFail($id);
-                $this->deleteImagesAndClassification($blogPost, 'image');
+    public function deleteBlogPost(Request $request, $id){
+        return $this->executeInTransaction(function () use ($request, $id) {
+            $blogPost = $this->HandlesFilndElement->findOne(BlogPost::class, $id);
+            if($blogPost){
+                $this->imageAssociationService->deleteImages($blogPost, 'image', $this->eliminateImages, $this->token);
+                $this->deleteClassification($blogPost);
                 $blogPost->delete();
                 return response()->json(['message' => 'Blog post successfully deleted'],200);
             }
-            return response()->json([
-                'message' => "Blog post not fount"
-            ], 404);
         });
     }
 
-    public function putBlogPost(ValidateDate $request, $id){
-        return $this->executeInTransaction(function () use ($request, $id) {
-            $blogPost = BlogPost::findOrFail($id);
-            $title = $request->input('title');
-            $content = $this->parsedown->text($request->input('content'));
-            $blogPost->title = $title;
-            $blogPost->content = $content;
-            $blogPost->link = $this->link($title, $blogPost);
-            $blogPost->authors = $this->authors($request);
-            $blogPost->reading_time = $this->readingTime($request->input('content'));
-            $blogPost->image_credits = $request->input('image_credits');
-            $blogPost->save();
-            $this->updateImagesAndClassification($blogPost, 'image', 'blog'); // Guardamos las imagenes y clasificaciones
-            return response()->json([
-                'message' => 'Blog post successfully updated'
-            ], 200);
-        });
-    }
 
-    public function patchBlogPost(ValidateDate $request, $id){
+    public function updateBlogPost(ValidateDate $request, $id){
         return $this->executeInTransaction(function () use ($request, $id) {
-            $blogPost = BlogPost::find($id);
+            $blogPost = $this->HandlesFilndElement->findOne(BlogPost::class, $id);
             if ($request->input('title')) {
                 $title = $request->input('title');
                 $blogPost->title = $title;
-                $blogPost->link = $this->link($title, $blogPost);
+                $blogPost->link = $this->link->generate($title, $blogPost);
             }
             if($request->input('content')){
                 $content = $request->input('content');
                 $blogPost->content = $this->parsedown->text($content);
-                $blogPost->reading_time = $this->readingTime($content);
+                $blogPost->reading_time = $this->time->readingTime($content);
+            }
+            if ($request->input('visible') !== null) {
+                $blogPost->visible = $this->visible;
+            }
+            if($request->input('important') !== null) {
+                $blogPost->important = $this->important;
             }
             if($request->input('authors')){
                 $blogPost->authors = $this->authors($request);
@@ -102,7 +86,10 @@ class BlogController extends Controller
             if($request->input('image_credits')){
                 $blogPost->image_credits = $request->input('image_credits');
             }
-            $this->updateImagesAndClassification($blogPost, 'image', 'blog'); // Guardamos las imagenes y clasificaciones
+            if($this->haveImages || $this->ids_images){
+                $this->imageAssociationService->updateImages($blogPost,  $this->haveImages, $this->images, $this->replaceImages, 'image',  $this->ids_images, 'blog', $this->token);
+            }
+            $this->updateClassification($blogPost); // Guardamos las imagenes y clasificaciones
             $blogPost->save();
             return response()->json([
                 'message' => 'Blog post updated successfully',
